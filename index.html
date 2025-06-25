@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dad Joke Generator</title>
+    <!-- Tailwind CSS CDN for easy styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tone.js CDN for programmatically generated sound -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        /* Custom styles to achieve the playful light blue background and font */
+        body {
+            font-family: 'Comic Sans MS', cursive, sans-serif; /* Casual font for playful feel */
+            background-color: #ADD8E6; /* Playful light blue */
+            color: #000000; /* Black text for visibility */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 1rem; /* Add some padding for smaller screens */
+            box-sizing: border-box; /* Include padding in element's total width and height */
+        }
+        .joke-container {
+            border: 3px dashed #FFA500; /* Dotted line around the joke, orange for playful heading */
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border-radius: 1.5rem; /* More rounded corners */
+            background-color: rgba(255, 255, 255, 0.9); /* Slightly transparent white background for joke block */
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.2); /* Deeper shadow */
+            max-width: 600px; /* Max width for readability */
+            width: 100%;
+            position: relative; /* IMPORTANT: This makes it a positioning context for absolute children */
+        }
+        .punchline {
+            display: none; /* Initially hidden */
+            margin-top: 1rem;
+            font-weight: bold;
+        }
+        /* This is the dog GIF that appears with the punchline and stays */
+        #static-laughing-dog-gif {
+            display: none; /* Initially hidden */
+            margin-top: 1rem;
+            text-align: center;
+        }
+        .btn {
+            background-color: #32CD32; /* Bright green button */
+            color: white;
+            font-weight: bold;
+            padding: 0.75rem 1.5rem;
+            border-radius: 9999px; /* Pill-shaped button */
+            box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2); /* Button shadow */
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+            border: none; /* Remove default button border */
+        }
+        .btn:hover {
+            background-color: #228B22; /* Darker green on hover */
+            transform: translateY(-2px); /* Slight lift effect */
+            box-shadow: 0 7px 12px rgba(0, 0, 0, 0.3);
+        }
+        .btn:active {
+            transform: translateY(0);
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+        }
+        .question-text, .answer-text {
+            font-size: 1.5rem; /* Large enough for comfortable reading */
+            line-height: 1.8;
+            margin-bottom: 0.5rem;
+        }
+        .footer-text {
+            font-family: 'Georgia', serif; /* Casual font for footer */
+            font-size: 0.9rem;
+            color: #4A5568; /* Slightly darker grey for footer text */
+        }
+        .header-title {
+            font-size: 3rem; /* Larger header title */
+            color: #FFA500; /* Orange for heading */
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3); /* Subtle text shadow */
+        }
+        /* Animation for pulse effect (optional, but requested in previous versions) */
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+        .animate-pulse-slow {
+            animation: pulse-slow 4s infinite ease-in-out;
+        }
+
+        /* Styles for the new animated pop-up GIF */
+        #animated-laughing-dog-popup {
+            position: absolute; /* Changed from fixed to absolute */
+            bottom: -80px; /* Position it below the joke container */
+            left: 50%;
+            transform: translateX(-50%) scale(0); /* Start scaled down and horizontally centered */
+            width: 60px; /* Size of a quarter (roughly) */
+            height: 60px;
+            border-radius: 50%; /* Round frame */
+            border: 3px solid #FFA500; /* Orange frame */
+            overflow: hidden; /* Ensures image stays within the circular frame */
+            display: flex; /* For centering the image inside the div */
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(255, 255, 255, 0.8); /* Slight transparent background */
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5); /* Pop effect shadow */
+            z-index: 1000; /* Ensure it's on top of other content */
+            opacity: 0; /* Start invisible */
+            transition: transform 0.3s ease-out, opacity 0.3s ease-out; /* Smooth transition for appearance */
+            pointer-events: none; /* Allows clicks to pass through */
+        }
+        #animated-laughing-dog-popup.show {
+            transform: translateX(-50%) scale(1); /* Scale up to full size and maintain horizontal center */
+            opacity: 1; /* Fade in */
+        }
+        #animated-laughing-dog-popup img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Ensures the image covers the circle */
+            border-radius: 50%; /* Keeps the image circular */
+        }
+        /* Style for the audio enablement overlay */
+        #audio-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000; /* Above everything else */
+            flex-direction: column;
+            color: white;
+            text-align: center;
+            font-size: 1.5rem;
+        }
+        #audio-overlay button {
+            margin-top: 1rem;
+            padding: 1rem 2rem;
+            font-size: 1.2rem;
+            border-radius: 10px;
+            cursor: pointer;
+            background-color: #32CD32;
+            color: white;
+            border: none;
+            box-shadow: 0 5px 10px rgba(0, 0, 0, 0.3);
+            transition: background-color 0.2s;
+        }
+        #audio-overlay button:hover {
+            background-color: #228B22;
+        }
+
+        /* Loading Spinner Styles */
+        .loader {
+            border: 4px solid #f3f3f3; /* Light grey */
+            border-top: 4px solid #FFA500; /* Orange */
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+            display: none; /* Hidden by default */
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Styles for the Rotating Coffee Mug */
+        .coffee-mug-container {
+            width: 100px;
+            height: 100px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 auto 20px; /* Center horizontally and add margin-bottom */
+            perspective: 500px; /* For 3D rotation effect */
+        }
+
+        .coffee-mug {
+            position: relative;
+            width: 80px;
+            height: 70px;
+            /* Gradient for detailed mug look */
+            background: linear-gradient(to right, #6F4E37 0%, #8D6E5C 50%, #6F4E37 100%); 
+            border-radius: 0 0 20px 20px; /* Rounded bottom */
+            border: 1px solid #5A3E2B;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.4); /* Deeper shadow */
+            transform-style: preserve-3d; /* Enable 3D transforms for children */
+            animation: rotate 5s linear infinite; /* Apply rotation animation */
+        }
+
+        /* Inner rim effect for the mug */
+        .coffee-mug::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 10px; /* Height of the rim */
+            background-color: rgba(255, 255, 255, 0.2); /* Light highlight for the rim */
+            border-radius: 20px 20px 0 0; /* Rounded top for the rim */
+            box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.2); /* Inner shadow for depth */
+        }
+
+        /* Handle of the mug */
+        .coffee-mug::before {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 40px;
+            background: linear-gradient(to bottom, #6F4E37, #8D6E5C); /* Gradient for handle */
+            border: 1px solid #5A3E2B;
+            border-radius: 0 15px 15px 0;
+            right: -25px; /* Position handle */
+            top: 15px;
+            box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+        }
+
+        .coffee-mug-content {
+            font-size: 3.5rem; /* Increased size of the emoji for more impact */
+            line-height: 1; /* Prevent extra space around emoji */
+            margin-top: -5px; /* Slight adjustment to center emoji vertically */
+            text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3); /* Added text shadow for caricature pop */
+        }
+
+        /* Rotation animation */
+        @keyframes rotate {
+            from {
+                transform: rotateY(0deg);
+            }
+            to {
+                transform: rotateY(360deg);
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="flex flex-col items-center justify-center bg-white p-8 rounded-2xl shadow-2xl max-w-lg w-full text-center border-4 border-orange-400">
+
+        <!-- Header -->
+        <header class="mb-4">
+            <h1 class="header-title font-bold mb-4 flex items-center justify-center">
+                Dad Joke Generator
+            </h1>
+            <!-- Replaced Modern dad image with Rotating Coffee Mug -->
+            <div class="coffee-mug-container">
+                <div class="coffee-mug">
+                    <span class="coffee-mug-content">😂</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Joke Section -->
+        <div class="joke-container flex flex-col items-center">
+            <!-- Loading spinner -->
+            <div id="joke-loader" class="loader"></div>
+            <p id="joke-question" class="question-text text-gray-800 mb-4 flex items-center">
+                Loading jokes...
+            </p>
+            <button id="reveal-button" class="btn mb-4" disabled>Reveal Punchline</button>
+            <p id="joke-answer" class="punchline answer-text text-gray-800 flex items-center">
+                
+            </p>
+
+            <!-- Static Laughing Dog GIF that appears with the punchline -->
+            <div id="static-laughing-dog-gif" class="laughing-dog">
+                <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExODY5bW5ja3U1bTgzZHppcmFrMjFybjJtYzVhcGN3enpiMjgyZGU5MSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/3oEjHAUOqG3lSS0f1C/giphy.gif" alt="Giggling Muttley-like Dog" class="mx-auto rounded-full">
+            </div>
+            
+            <!-- This is the new animated pop-up GIF (now positioned below the joke) -->
+            <div id="animated-laughing-dog-popup" class="animated-popup">
+                <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExODY5bW5ja3U1bTgzZHppcmFrMjFybjJtYzVhcGN3enpiMjgyZGU5MSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/3oEjHAUOqG3lSS0f1C/giphy.gif" alt="Giggling Dog Pop-up">
+            </div>
+        </div>
+
+        <!-- Get New Joke Button -->
+        <button id="new-joke-button" class="btn mt-6 text-xl px-8 py-3" disabled>Tell Me Another One!</button>
+
+        <!-- Footer -->
+        <footer class="mt-8 text-center footer-text">
+            <p>&copy; Made for giggles, 2025</p>
+        </footer>
+    </div>
+
+    <!-- Audio Enablement Overlay -->
+    <div id="audio-overlay">
+        <p>This site plays sounds for fun!</p>
+        <button id="enable-audio-button">Click to Enable Sound</button>
+    </div>
+
+    <script>
+        // Array to hold jokes fetched from the API
+        let dadJokes = [];
+        let currentJokeIndex = -1; // To keep track of the current joke
+
+        // Get elements from the HTML
+        const jokeQuestion = document.getElementById('joke-question');
+        const jokeAnswer = document.getElementById('joke-answer');
+        const revealButton = document.getElementById('reveal-button');
+        const newJokeButton = document.getElementById('new-joke-button');
+        const staticLaughingDogGif = document.getElementById('static-laughing-dog-gif');
+        const animatedLaughingDogPopup = document.getElementById('animated-laughing-dog-popup');
+        const audioOverlay = document.getElementById('audio-overlay');
+        const enableAudioButton = document.getElementById('enable-audio-button');
+        const jokeLoader = document.getElementById('joke-loader'); // Reference to the loader
+
+        // Initialize a Tone.js synth for generating sound
+        const synth = new Tone.PluckSynth().toDestination();
+
+        // Flag to track if audio is enabled
+        let audioEnabled = false;
+
+        // Function to fetch jokes from the API
+        async function fetchNewJokes() {
+            // Show loader and disable buttons while fetching
+            jokeQuestion.textContent = "Fetching new jokes...";
+            jokeAnswer.textContent = "";
+            jokeLoader.style.display = 'block';
+            revealButton.disabled = true;
+            newJokeButton.disabled = true;
+
+            dadJokes = []; // Clear existing jokes
+            const jokeCount = 5; // We want at least 5 new jokes
+
+            try {
+                // Create an array of fetch promises
+                const fetchPromises = [];
+                for (let i = 0; i < jokeCount; i++) {
+                    fetchPromises.push(
+                        fetch('https://icanhazdadjoke.com/', {
+                            headers: {
+                                'Accept': 'application/json' // Request JSON response
+                            }
+                        })
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`HTTP error! status: ${response.status}`);
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            // API returns a 'joke' property
+                            return { question: data.joke, answer: "" }; // We'll set answer later for simplicity
+                        })
+                        .catch(error => {
+                            console.error('Error fetching joke:', error);
+                            return null; // Return null for failed fetches
+                        })
+                    );
+                }
+
+                // Wait for all fetch requests to complete
+                const fetchedResults = await Promise.all(fetchPromises);
+                
+                // Filter out any failed fetches and populate dadJokes
+                dadJokes = fetchedResults.filter(joke => joke !== null)
+                                        .map(joke => ({
+                                            question: joke.question,
+                                            // For this API, the joke is usually the whole thing.
+                                            // We'll split it by a common question mark if present, or just use a generic answer.
+                                            answer: joke.question.includes('?') ? joke.question.split('?').pop().trim() : "That's the punchline!" 
+                                        }));
+
+                // If the API returns a single-line joke, we'll try to split it into Q&A
+                // For 'icanhazdadjoke', it's usually just one line.
+                // A more advanced API might provide separate question/answer fields.
+                // For demonstration, if no '?' is found, it will default to a generic punchline.
+                
+                if (dadJokes.length === 0) {
+                    jokeQuestion.textContent = "Failed to load jokes. Please try again later.";
+                    revealButton.disabled = true;
+                    newJokeButton.disabled = true;
+                } else {
+                    displayNewJoke(); // Display the first fetched joke
+                    revealButton.disabled = false;
+                    newJokeButton.disabled = false;
+                }
+
+            } catch (error) {
+                console.error("Error during joke fetching:", error);
+                jokeQuestion.textContent = "Could not load jokes. Network error?";
+                revealButton.disabled = true;
+                newJokeButton.disabled = true;
+            } finally {
+                jokeLoader.style.display = 'none'; // Hide loader
+            }
+        }
+
+
+        // Function to display a new joke
+        function displayNewJoke() {
+            if (dadJokes.length === 0) {
+                jokeQuestion.textContent = "No jokes available. Click 'Tell Me Another One!' to try fetching new jokes!";
+                jokeAnswer.textContent = "";
+                revealButton.disabled = true;
+                return;
+            }
+
+            // Select a random joke that is not the current one (if possible)
+            let newIndex;
+            do {
+                newIndex = Math.floor(Math.random() * dadJokes.length);
+            } while (newIndex === currentJokeIndex && dadJokes.length > 1); // Ensure different joke if more than one
+            
+            currentJokeIndex = newIndex;
+            const joke = dadJokes[currentJokeIndex];
+
+            // Update the question text with a smile emoji
+            let questionPart = joke.question;
+            let answerPart = joke.answer;
+
+            // Simple attempt to split question and answer if the API gives one line
+            if (joke.question.includes('?')) {
+                const parts = joke.question.split('?');
+                questionPart = parts[0] + '?'; // Keep the question mark with the question
+                answerPart = parts.slice(1).join('?').trim(); // Rest is the answer
+            } else {
+                // If no question mark, treat the whole thing as question and use generic punchline
+                questionPart = joke.question;
+                answerPart = "That's the punchline!"; // Default if cannot split
+            }
+            
+            jokeQuestion.textContent = `😄 ${questionPart}`;
+            jokeAnswer.textContent = `😄 ${answerPart}`;
+
+
+            // Hide the answer and both dog GIFs
+            jokeAnswer.style.display = 'none';
+            staticLaughingDogGif.style.display = 'none';
+            animatedLaughingDogPopup.classList.remove('show'); // Ensure pop-up is hidden
+
+            // Show the reveal button
+            revealButton.style.display = 'block';
+            revealButton.disabled = false; // Re-enable if it was disabled
+            newJokeButton.disabled = false; // Re-enable if it was disabled
+        }
+
+        // Function to reveal the punchline
+        function revealPunchline() {
+            // Show the answer and the static dog GIF
+            jokeAnswer.style.display = 'block';
+            staticLaughingDogGif.style.display = 'block';
+            
+            // Hide the reveal button
+            revealButton.style.display = 'none';
+
+            // Play the Tone.js sound ONLY if audio is enabled
+            if (audioEnabled) {
+                // Trigger a note from the synth for a short duration
+                synth.triggerAttackRelease("C5", "8n"); // C5 note for an 8th note duration
+            }
+
+            // Show the animated pop-up
+            animatedLaughingDogPopup.classList.add('show');
+
+            // Hide the animated pop-up after 3 seconds
+            setTimeout(() => {
+                animatedLaughingDogPopup.classList.remove('show');
+            }, 3000); // 3000 milliseconds = 3 seconds
+        }
+
+        // Event listener for the "Enable Sound" button
+        enableAudioButton.addEventListener('click', async () => {
+            // Start Tone.js audio context, essential for sound playback
+            await Tone.start(); 
+            audioEnabled = true; // Set flag to true
+            audioOverlay.style.display = 'none'; // Hide the overlay
+            console.log("Audio context started. Sound enabled.");
+            // Jokes are now fetched on DOMContentLoaded, no need to fetch here again immediately.
+            // If the initial fetch is still ongoing or failed, this click won't re-trigger it.
+            // A more robust app might have a 'Retry Fetch' button.
+        });
+
+
+        // Event Listeners for buttons
+        revealButton.addEventListener('click', revealPunchline);
+        // Modify 'Tell Me Another One!' button to fetch new jokes if the current list is empty
+        newJokeButton.addEventListener('click', () => {
+            if (dadJokes.length === 0) {
+                fetchNewJokes(); // If no jokes, fetch them
+            } else {
+                displayNewJoke(); // Otherwise, just display a new one from the current batch
+            }
+        });
+
+        // Initial setup: Fetch jokes immediately on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initial message while the sound overlay is active and jokes are being fetched
+            jokeQuestion.textContent = "Loading jokes...";
+            jokeLoader.style.display = 'block'; // Show the loader
+            revealButton.disabled = true; // Keep buttons disabled initially
+            newJokeButton.disabled = true;
+            
+            // Start fetching jokes as soon as the DOM is ready
+            fetchNewJokes(); 
+        });
+    </script>
+</body>
+</html>
